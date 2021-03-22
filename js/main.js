@@ -7,51 +7,58 @@
 */
 
 //both piles derived from same deck, winning conditions for getCards() determines whose will get the all the played cards pushed into the respective array
-const path = "https://deckofcardsapi.com/api/deck/";
-let deckId = "";
-const piles = {
-  player1: [],
-  player2: []
+const deck = {
+  id: "",
+  pile1: [],
+  pile2: []
 };
 
-//this function is called when the draw button is clicked and returns the data for the drawn card
-async function drawFromPile(player, num = 1) {
-  const url = `${path}${deckId}/pile/${player}/draw/?count=${num}`;
-  const res = await fetch(url);
-  const data = await res.json();
-
-  /* redefine each individual pile if remaining cards === 0 */
-  if (data.piles[player].remaining === 0) {
-    await setPile(player, piles[player]);
-    await fetch(`${path}${deckId}/pile/${player}/shuffle/`);
-    piles[player] = [];
+async function getFetch(url) {
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error(err.message + ": Your fetch done messed up");
   }
+}
 
-  return data.cards;
+//this function is called when the draw button is clicked and returns the data for the drawn card
+async function drawFromPile(player) {
+  const url = `https://deckofcardsapi.com/api/deck/${deck.id}/pile/${player}/draw/`;
+  const data = await getFetch(url);
+  const playerPile = player === "player1" ? deck.pile1 : deck.pile2;
+  console.log(data);
+  if (+data.piles[player].remaining === 0) await setPile(player, playerPile);
+
+  return data.cards[0];
 }
 
 //This function is called to assign each player their own pile
 async function setPile(player, pile) {
-  const url = `${path}${deckId}/pile/${player}/add/?cards=${pile}`;
-  const res = await fetch(url);
-  const data = await res.json();
+  const url = `https://deckofcardsapi.com/api/deck/${
+    deck.id
+  }/pile/${player}/add/?cards=${pile.join(",")}`;
+  const data = await getFetch(url);
   return data;
 }
 
 //This function makes a pile for each player and maps an array of the card codes in each player's pile
 async function makePile(numOfCards) {
-  const res = await fetch(`${path}${deckId}/draw/?count=${numOfCards}`);
-  const data = await res.json();
-  const pile = data.cards.map((card) => card.code).join(",");
+  const data = await getFetch(
+    `https://deckofcardsapi.com/api/deck/${deck.id}/draw/?count=${numOfCards}`
+  );
+  const pile = data.cards.map((card) => card.code);
   return pile;
 }
 
 //this function requests a single deck with a unique ID from the API. The starting piles are divided evenly amongst 2 players and assigned to their name
 async function createDeck() {
-  const res = await fetch(`${path}new/shuffle/?deck_count=1`);
-  const data = await res.json(); // parse response as JSON
+  const data = await getFetch(
+    "https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1"
+  );
 
-  deckId = data.deck_id;
+  deck.id = data.deck_id;
   const startingPile1 = await makePile(26);
   const startingPile2 = await makePile(26);
   await setPile("player1", startingPile1);
@@ -120,3 +127,9 @@ function cardValue(val) {
 }
 
 createDeck();
+
+async function testCycle(num) {
+  for (let i = 0; i < num; i++) {
+    await getCards();
+  }
+}
