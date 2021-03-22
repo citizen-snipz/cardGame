@@ -9,9 +9,10 @@
 //both piles derived from same deck, winning conditions for getCards() determines whose will get the all the played cards pushed into the respective array
 const deck = {
   id: "",
-  pile1: [],
-  pile2: []
+  player1: [],
+  player2: []
 };
+let count = 0;
 
 async function getFetch(url) {
   try {
@@ -24,14 +25,14 @@ async function getFetch(url) {
 }
 
 //this function is called when the draw button is clicked and returns the data for the drawn card
-async function drawFromPile(player) {
-  const url = `https://deckofcardsapi.com/api/deck/${deck.id}/pile/${player}/draw/`;
+async function drawFromPile(player, num = 1) {
+  const url = `https://deckofcardsapi.com/api/deck/${deck.id}/pile/${player}/draw/?count=${num}`;
   const data = await getFetch(url);
-  const playerPile = player === "player1" ? deck.pile1 : deck.pile2;
-  console.log(data);
+  const playerPile = player === "player1" ? deck.player1 : deck.player2;
+  console.log((count += 1));
   if (+data.piles[player].remaining === 0) await setPile(player, playerPile);
 
-  return data.cards[0];
+  return data.cards;
 }
 
 //This function is called to assign each player their own pile
@@ -65,10 +66,11 @@ async function createDeck() {
   await setPile("player2", startingPile2);
 }
 
-document.querySelector("button").addEventListener("click", getCards);
+document.querySelector("button").addEventListener("click", () => getCards());
 
 //This function compares the draws from P1 and P2 to determine the victor. The card with the highest value gets all cards played in that round pushed to its pile array to be reused when the piles run out of cards
-async function getCards(cards) {
+async function getCards(cards = []) {
+  console.log(cards);
   let [{ image: image1, value: value1, code: code1 }] = await drawFromPile(
     "player1"
   );
@@ -80,16 +82,15 @@ async function getCards(cards) {
   document.querySelector("#playerTwo").src = image2;
   const val1 = cardValue(value1);
   const val2 = cardValue(value2);
-  if (!cards) cards = [];
   if (val1 > val2) {
-    piles["player1"].push(code1, code2, ...[]);
+    deck.player1.push(code1, code2, ...cards);
     document.querySelector("h3").innerHTML = `Player 1 wins!`;
   } else if (val1 < val2) {
-    piles["player2"].push(code1, code2, ...[]);
+    deck.player2.push(code1, code2, ...cards);
     document.querySelector("h3").innerHTML = `Player 2 wins!`;
   } else {
     document.querySelector("h3").innerHTML = `WAR WERE DECLARED!`;
-    declareWar([code1, code2, ...cards]);
+    declareWar([...cards, code1, code2]);
   }
 }
 
@@ -99,17 +100,12 @@ async function declareWar(cards) {
   2. winner determined by value of 4th card
   3. winner gets all cards pushed into their pile array
    */
-  await drawFromPile("player1", 4);
-  await drawFromPile("player2", 4);
-  let warVal1 = cardValue("player1");
-  let warVal2 = cardValue("player2");
-  if (warVal1[3] > warVal2[3]) {
-    piles["player1"].push(...warVal1, ...warVal2);
-    document.querySelector("h3").innerHTML = `Player 1 has won this war!`;
-  } else if (warVal1[3] < warVal2[3]) {
-    piles["player2"].push(...warVal1, ...warVal2);
-    document.querySelector("h3").innerHTML = `Player 2 has won this war!`;
-  }
+  const drawnCards = await Promise.all([
+    drawFromPile("player1", 3),
+    drawFromPile("player2", 3)
+  ]);
+  const warPot = [...drawnCards].flat().map((card) => card.code);
+  getCards([...warPot, ...cards]);
 }
 
 function cardValue(val) {
