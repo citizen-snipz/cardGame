@@ -129,3 +129,10 @@ async function testCycle(num) {
     await getCards();
   }
 }
+
+/*
+NEXT STEPS:
+*set timeout for war to start so players can see that a war happened (maybe alert or event listener?)
+*display the cards that were sacrificed in the war so players know what they lost/won
+*have a final win condition that executes once a player has lost all of their cards
+*/
