@@ -7,21 +7,32 @@
 */
 
 //both piles derived from same deck, winning conditions for getCards() determines whose will get the all the played cards pushed into the respective array
+const path = "https://deckofcardsapi.com/api/deck/";
 let deckId = "";
-let pile1 = [];
-let pile2 = [];
+const piles = {
+  player1: [],
+  player2: []
+};
 
 //this function is called when the draw button is clicked and returns the data for the drawn card
-async function drawFromPile(player) {
-  const url = `https://deckofcardsapi.com/api/deck/${deckId}/pile/${player}/draw/`;
+async function drawFromPile(player, num = 1) {
+  const url = `${path}${deckId}/pile/${player}/draw/?count=${num}`;
   const res = await fetch(url);
   const data = await res.json();
-  return data.cards[0];
+
+  /* redefine each individual pile if remaining cards === 0 */
+  if (data.piles[player].remaining === 0) {
+    await setPile(player, piles[player]);
+    await fetch(`${path}${deckId}/pile/${player}/shuffle/`);
+    piles[player] = [];
+  }
+
+  return data.cards;
 }
 
-//This function is called in createDeck() to assign each player their own pile from the same deck
+//This function is called to assign each player their own pile
 async function setPile(player, pile) {
-  const url = `https://deckofcardsapi.com/api/deck/${deckId}/pile/${player}/add/?cards=${pile}`;
+  const url = `${path}${deckId}/pile/${player}/add/?cards=${pile}`;
   const res = await fetch(url);
   const data = await res.json();
   return data;
@@ -29,9 +40,7 @@ async function setPile(player, pile) {
 
 //This function makes a pile for each player and maps an array of the card codes in each player's pile
 async function makePile(numOfCards) {
-  const res = await fetch(
-    `https://deckofcardsapi.com/api/deck/${deckId}/draw/?count=${numOfCards}`
-  );
+  const res = await fetch(`${path}${deckId}/draw/?count=${numOfCards}`);
   const data = await res.json();
   const pile = data.cards.map((card) => card.code).join(",");
   return pile;
@@ -39,9 +48,7 @@ async function makePile(numOfCards) {
 
 //this function requests a single deck with a unique ID from the API. The starting piles are divided evenly amongst 2 players and assigned to their name
 async function createDeck() {
-  const res = await fetch(
-    "https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1"
-  );
+  const res = await fetch(`${path}new/shuffle/?deck_count=1`);
   const data = await res.json(); // parse response as JSON
 
   deckId = data.deck_id;
@@ -54,24 +61,48 @@ async function createDeck() {
 document.querySelector("button").addEventListener("click", getCards);
 
 //This function compares the draws from P1 and P2 to determine the victor. The card with the highest value gets all cards played in that round pushed to its pile array to be reused when the piles run out of cards
-async function getCards() {
-  let draw1 = await drawFromPile("player1");
-  let draw2 = await drawFromPile("player2");
+async function getCards(cards) {
+  let [{ image: image1, value: value1, code: code1 }] = await drawFromPile(
+    "player1"
+  );
+  let [{ image: image2, value: value2, code: code2 }] = await drawFromPile(
+    "player2"
+  );
 
-  document.querySelector("#playerOne").src = draw1.image;
-  document.querySelector("#playerTwo").src = draw2.image;
-  const val1 = cardValue(draw1.value);
-  const val2 = cardValue(draw2.value);
+  document.querySelector("#playerOne").src = image1;
+  document.querySelector("#playerTwo").src = image2;
+  const val1 = cardValue(value1);
+  const val2 = cardValue(value2);
+  if (!cards) cards = [];
   if (val1 > val2) {
-    pile1.push(draw1.code, draw2.code);
+    piles["player1"].push(code1, code2, ...[]);
     document.querySelector("h3").innerHTML = `Player 1 wins!`;
   } else if (val1 < val2) {
-    pile2.push(draw1.code, draw2.code);
+    piles["player2"].push(code1, code2, ...[]);
     document.querySelector("h3").innerHTML = `Player 2 wins!`;
   } else {
     document.querySelector("h3").innerHTML = `WAR WERE DECLARED!`;
+    declareWar([code1, code2, ...cards]);
   }
-  /* redefine each individual pile if remaining cards === 0 */
+}
+
+async function declareWar(cards) {
+  /**
+  1. draw 4 cards from each players deck
+  2. winner determined by value of 4th card
+  3. winner gets all cards pushed into their pile array
+   */
+  await drawFromPile("player1", 4);
+  await drawFromPile("player2", 4);
+  let warVal1 = cardValue("player1");
+  let warVal2 = cardValue("player2");
+  if (warVal1[3] > warVal2[3]) {
+    piles["player1"].push(...warVal1, ...warVal2);
+    document.querySelector("h3").innerHTML = `Player 1 has won this war!`;
+  } else if (warVal1[3] < warVal2[3]) {
+    piles["player2"].push(...warVal1, ...warVal2);
+    document.querySelector("h3").innerHTML = `Player 2 has won this war!`;
+  }
 }
 
 function cardValue(val) {
